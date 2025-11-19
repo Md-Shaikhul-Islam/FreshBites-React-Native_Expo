@@ -22,6 +22,8 @@ const MAPPING = {
   'info.circle': 'info',
   'star.fill': 'star',
   'person.fill': 'person',
+  'briefcase.fill': 'work',
+  'bell.fill': 'notifications',
 } as IconMapping;
 
 /**

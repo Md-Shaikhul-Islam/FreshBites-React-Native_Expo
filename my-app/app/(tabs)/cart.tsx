@@ -4,7 +4,6 @@ import { Colors } from '@/constants/theme';
 import { useCart } from '@/context/cart-context';
 import { useUser } from '@/context/user-context';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { requestCartPurchase } from '@/services/iap';
 import React, { useState } from 'react';
 import { Alert, FlatList, Image, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
@@ -17,13 +16,13 @@ export default function CartScreen() {
   const colors = Colors[colorScheme ?? 'light'];
 
   const [showCheckout, setShowCheckout] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('bkash');
+    const [paymentMethod, setPaymentMethod] = useState<'bkash' | 'nagad' | 'card' | 'cash'>('bkash');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [cardNumber, setCardNumber] = useState('');
   const [processing, setProcessing] = useState(false);
 
-  const deliveryFee = 50;
   const subtotal = getTotalPrice();
+  const deliveryFee = subtotal >= 300 ? 0 : 50;
   const discount = isPremium ? subtotal * 0.1 : 0; // 10% discount for premium
   const total = subtotal + deliveryFee - discount;
 
@@ -50,43 +49,7 @@ export default function CartScreen() {
     setProcessing(true);
 
     try {
-      // Handle In-App Purchase payment (always in sandbox mode for now)
-      if (paymentMethod === 'iap') {
-        const success = await requestCartPurchase(total);
-        setProcessing(false);
-        
-        if (success) {
-          Alert.alert(
-            '✅ Order Successful!',
-            `Your order has been placed successfully!\n\n` +
-            `Order Total: ৳${total.toFixed(2)}\n` +
-            `Payment Method: In-App Purchase (Sandbox)\n` +
-            `🧪 Test Mode - No real charge\n` +
-            `\nEstimated delivery: 30-45 minutes`,
-            [
-              {
-                text: 'View Orders',
-                onPress: () => {
-                  clearCart();
-                  setShowCheckout(false);
-                }
-              },
-              {
-                text: 'OK',
-                onPress: () => {
-                  clearCart();
-                  setShowCheckout(false);
-                }
-              }
-            ]
-          );
-        } else {
-          Alert.alert('Purchase Cancelled', 'Your order was not completed.');
-        }
-        return;
-      }
-
-      // Simulate payment processing for other methods
+      // Simulate payment processing for all methods
       setTimeout(() => {
         setProcessing(false);
         
@@ -97,7 +60,6 @@ export default function CartScreen() {
           `Your order has been placed successfully!\n\n` +
           `Order Total: ৳${total.toFixed(2)}\n` +
           `Payment Method: ${paymentDetails}\n` +
-          `${sandboxMode ? '\n🧪 Sandbox Mode - No real charge' : ''}` +
           `\nEstimated delivery: 30-45 minutes`,
           [
             {
@@ -133,8 +95,7 @@ export default function CartScreen() {
         return `Card - **** **** **** ${cardNumber.slice(-4)}`;
       case 'cash':
         return 'Cash on Delivery';
-      case 'iap':
-        return 'In-App Purchase';
+
       default:
         return 'Unknown';
     }
@@ -169,7 +130,11 @@ export default function CartScreen() {
             </View>
             <View style={styles.summaryRow}>
               <ThemedText style={{ color: colors.text, opacity: 0.7 }}>Delivery Fee</ThemedText>
-              <ThemedText style={{ color: colors.text }}>৳{deliveryFee.toFixed(2)}</ThemedText>
+              {deliveryFee === 0 ? (
+                <ThemedText style={{ color: colors.success }}>FREE 🎉</ThemedText>
+              ) : (
+                <ThemedText style={{ color: colors.text }}>৳{deliveryFee.toFixed(2)}</ThemedText>
+              )}
             </View>
             {isPremium && (
               <View style={styles.summaryRow}>
@@ -299,41 +264,16 @@ export default function CartScreen() {
               )}
             </Pressable>
 
-            {/* In-App Purchase */}
-            <Pressable
-              onPress={() => setPaymentMethod('iap')}
-              style={[
-                styles.paymentOption,
-                { backgroundColor: colors.card, borderColor: paymentMethod === 'iap' ? colors.success : colors.border },
-              ]}
-            >
-              <View style={styles.paymentHeader}>
-                <ThemedText style={{ fontSize: 24 }}>🛒</ThemedText>
-                <View style={{ flex: 1 }}>
-                  <ThemedText type="defaultSemiBold" style={{ color: colors.text }}>In-App Purchase</ThemedText>
-                  <ThemedText style={{ fontSize: 11, color: colors.text, opacity: 0.6, marginTop: 2 }}>
-                    Apple/Google Pay via App Store
-                  </ThemedText>
-                </View>
-              </View>
-              {paymentMethod === 'iap' && (
-                <View style={[styles.radioSelected, { backgroundColor: colors.success }]}>
-                  <ThemedText style={{ color: '#fff' }}>✓</ThemedText>
-                </View>
-              )}
-            </Pressable>
+
           </View>
 
           {/* Payment Info */}
           <View style={[styles.infoBox, { backgroundColor: colorScheme === 'dark' ? 'rgba(59, 130, 246, 0.15)' : 'rgba(59, 130, 246, 0.08)' }]}>
             <ThemedText style={{ fontSize: 13, fontWeight: '600', color: colors.text, marginBottom: 4 }}>
-              {paymentMethod === 'iap' ? '🛒 Secure In-App Purchase' : '🔒 Secure Payment'}
+              🔒 Secure Payment
             </ThemedText>
             <ThemedText style={{ fontSize: 12, color: colors.text, opacity: 0.7 }}>
-              {paymentMethod === 'iap' 
-                ? 'Purchase through your Apple/Google account. Safe and secure.' 
-                : `Your payment information is encrypted and secure.`}
-              {sandboxMode && ' (Sandbox Mode - No real charges)'}
+              Your payment information is encrypted and secure.
             </ThemedText>
           </View>
 

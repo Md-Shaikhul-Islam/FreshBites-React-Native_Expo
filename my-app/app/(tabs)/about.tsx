@@ -1,7 +1,7 @@
-import { Image } from 'expo-image';
 import React from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
+import { FreshBitesLogo } from '@/components/freshbites-logo';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Colors } from '@/constants/theme';
@@ -20,11 +20,7 @@ export default function AboutScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {/* App Header */}
         <View style={styles.header}>
-          <Image
-            source={require('@/assets/images/partial-react-logo.png')}
-            style={styles.logo}
-            contentFit="contain"
-          />
+          <FreshBitesLogo size={140} />
           <ThemedText type="title" style={styles.appName}>FreshBites</ThemedText>
           <ThemedText style={styles.tagline}>Your Premium Food Delivery App</ThemedText>
         </View>
@@ -131,11 +127,6 @@ const styles = StyleSheet.create({
     alignItems: 'center', 
     marginBottom: 32,
     paddingTop: 8,
-  },
-  logo: { 
-    width: 120, 
-    height: 80,
-    marginBottom: 12,
   },
   appName: {
     marginBottom: 8,

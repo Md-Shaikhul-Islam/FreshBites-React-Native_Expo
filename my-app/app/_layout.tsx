@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
 import { CartProvider } from '@/context/cart-context';
+import { NotificationProvider } from '@/context/notification-context';
 import { UserProvider } from '@/context/user-context';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
@@ -18,11 +19,12 @@ export default function RootLayout() {
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <UserProvider>
         <CartProvider>
-          <Stack>
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-          </Stack>
-          <StatusBar style="auto" />
+          <NotificationProvider>
+            <Stack>
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            </Stack>
+            <StatusBar style="auto" />
+          </NotificationProvider>
         </CartProvider>
       </UserProvider>
     </ThemeProvider>

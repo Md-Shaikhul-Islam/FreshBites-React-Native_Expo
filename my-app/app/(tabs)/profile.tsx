@@ -1,18 +1,22 @@
+import { IAPModal } from '@/components/iap-modal';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Colors } from '@/constants/theme';
 import { useUser } from '@/context/user-context';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { requestPremiumPurchase, restorePremium } from '@/services/iap';
+import { restorePremium } from '@/services/iap';
 import React, { useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
-type RoleOption = 'Normal' | 'Premium';
+type RoleOption = 'Normal' | 'Premium' | 'Manager';
 
 export default function ProfileScreen() {
-  const { isPremium, setPremium, sandboxMode, setSandboxMode } = useUser();
+  const { isPremium, setPremium, userRole, setUserRole } = useUser();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [showIAPModal, setShowIAPModal] = useState(false);
+  const [showPasscodeModal, setShowPasscodeModal] = useState(false);
+  const [passcode, setPasscode] = useState('');
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
   
@@ -23,41 +27,61 @@ export default function ProfileScreen() {
   const [address, setAddress] = useState('123 Main Street, Dhaka');
   const [isEditing, setIsEditing] = useState(false);
 
-  const role: RoleOption = useMemo(() => (isPremium ? 'Premium' : 'Normal'), [isPremium]);
+  const role: RoleOption = useMemo(() => {
+    if (userRole === 'manager') return 'Manager';
+    return isPremium ? 'Premium' : 'Normal';
+  }, [isPremium, userRole]);
 
   const onSelectRole = async (value: RoleOption) => {
     if (value === 'Normal') {
-      await setPremium(false);
+      await setUserRole('normal');
       setOpen(false);
       return;
     }
-    if (isPremium) {
+    if (value === 'Premium') {
+      if (isPremium) {
+        setOpen(false);
+        return;
+      }
+      // Trigger upgrade flow
       setOpen(false);
+      onUpgrade();
       return;
     }
     setOpen(false);
   };
 
-  const onUpgrade = async () => {
-    setBusy(true);
-    try {
-      if (sandboxMode) {
-        await setPremium(true);
-        Alert.alert('Sandbox Unlock', 'Premium unlocked in sandbox mode (no charge).');
-      } else {
-        const ok = await requestPremiumPurchase();
-        if (ok) {
-          await setPremium(true);
-          Alert.alert('Success', 'Premium unlocked on this device.');
-        } else {
-          Alert.alert('Purchase not completed', 'We could not confirm the premium unlock.');
-        }
-      }
-    } catch (e) {
-      Alert.alert('Purchase failed', String(e));
-    } finally {
-      setBusy(false);
+  const handleManagerAccess = () => {
+    setShowPasscodeModal(true);
+    setPasscode('');
+  };
+
+  const handlePasscodeSubmit = async () => {
+    if (passcode === '123456') {
+      setShowPasscodeModal(false);
+      await setUserRole('manager');
+      setPasscode('');
+      Alert.alert('✅ Access Granted', 'You now have manager privileges. Check the Manager tab to add/edit items.');
+    } else {
+      Alert.alert('❌ Access Denied', 'Incorrect passcode. Please try again.');
+      setPasscode('');
     }
+  };
+
+  const handleIAPPurchase = async (): Promise<boolean> => {
+    try {
+      // Always use sandbox mode for premium activation
+      await setPremium(true);
+      return true;
+    } catch (e) {
+      console.error('IAP Purchase failed:', e);
+      return false;
+    }
+  };
+
+  const onUpgrade = async () => {
+    // Show IAP modal instead of direct upgrade
+    setShowIAPModal(true);
   };
 
   const onRestore = async () => {
@@ -201,31 +225,55 @@ export default function ProfileScreen() {
               </ThemedText>
               <Pressable disabled={busy} onPress={onUpgrade} style={styles.upgradeButton}>
                 <ThemedText type="defaultSemiBold" style={{ color: '#fff' }}>
-                  {busy ? 'Processing...' : (sandboxMode ? '🧪 Upgrade (Sandbox)' : '⭐ Upgrade Now')}
+                  {busy ? 'Processing...' : '⭐ Upgrade Now'}
                 </ThemedText>
               </Pressable>
             </View>
           )}
         </View>
 
-        {/* Sandbox Mode */}
+
+
+        {/* Manager Access */}
         <View style={styles.section}>
-          <View style={styles.sandboxContainer}>
-            <View style={{ flex: 1 }}>
-              <ThemedText type="defaultSemiBold">🧪 Developer Sandbox</ThemedText>
-              <ThemedText style={{ fontSize: 12, marginTop: 4, opacity: 0.8 }}>
-                Test premium features without real purchases
+          <ThemedText type="subtitle" style={{ marginBottom: 12 }}>Manager Tools</ThemedText>
+          {userRole === 'manager' ? (
+            <View style={[styles.managerCard, { backgroundColor: colors.card }]}>
+              <View style={styles.managerBadge}>
+                <ThemedText style={{ fontSize: 24 }}>💼</ThemedText>
+              </View>
+              <ThemedText type="defaultSemiBold" style={{ marginTop: 12, color: colors.tint }}>
+                Manager Access Active
               </ThemedText>
+              <ThemedText style={{ fontSize: 12, marginTop: 4, opacity: 0.7, textAlign: 'center' }}>
+                You can add/edit items from the Manager tab
+              </ThemedText>
+              <Pressable 
+                onPress={() => setUserRole('normal')} 
+                style={[styles.revokeButton, { backgroundColor: colors.error }]}
+              >
+                <ThemedText type="defaultSemiBold" style={{ color: '#fff', fontSize: 12 }}>
+                  Revoke Access
+                </ThemedText>
+              </Pressable>
             </View>
+          ) : (
             <Pressable 
-              onPress={() => setSandboxMode(!sandboxMode)} 
-              style={[styles.sandboxToggle, sandboxMode && styles.sandboxToggleActive]}
+              onPress={handleManagerAccess} 
+              style={[styles.managerAccessButton, { backgroundColor: colors.card }]}
             >
-              <ThemedText style={{ fontSize: 12, fontWeight: '600' }}>
-                {sandboxMode ? '✓ ON' : 'OFF'}
-              </ThemedText>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <ThemedText style={{ fontSize: 32 }}>🔐</ThemedText>
+                <View style={{ flex: 1 }}>
+                  <ThemedText type="defaultSemiBold">Request Manager Access</ThemedText>
+                  <ThemedText style={{ fontSize: 12, marginTop: 2, opacity: 0.7 }}>
+                    Enter passcode to manage items
+                  </ThemedText>
+                </View>
+                <ThemedText style={{ fontSize: 20, opacity: 0.5 }}>→</ThemedText>
+              </View>
             </Pressable>
-          </View>
+          )}
         </View>
 
         {/* Restore Purchases */}
@@ -235,6 +283,78 @@ export default function ProfileScreen() {
           </Pressable>
         </View>
       </ScrollView>
+
+      {/* IAP Modal */}
+      <IAPModal
+        visible={showIAPModal}
+        onClose={() => setShowIAPModal(false)}
+        onPurchase={handleIAPPurchase}
+        productTitle="Premium Membership"
+        productPrice="৳ 1000"
+        productDescription="Unlock exclusive premium menu access, 10% discount on all orders, priority customer support, and early access to new features"
+      />
+
+      {/* Passcode Modal */}
+      <Modal
+        visible={showPasscodeModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setShowPasscodeModal(false);
+          setPasscode('');
+        }}
+      >
+        <Pressable 
+          style={styles.modalOverlay}
+          onPress={() => {
+            setShowPasscodeModal(false);
+            setPasscode('');
+          }}
+        >
+          <Pressable style={[styles.passcodeModal, { backgroundColor: colors.card }]} onPress={(e) => e.stopPropagation()}>
+            <ThemedText type="title" style={{ marginBottom: 8, textAlign: 'center' }}>🔐</ThemedText>
+            <ThemedText type="defaultSemiBold" style={{ marginBottom: 8, textAlign: 'center' }}>Manager Access</ThemedText>
+            <ThemedText style={{ marginBottom: 20, textAlign: 'center', opacity: 0.7, fontSize: 14 }}>
+              Enter manager passcode to access management features
+            </ThemedText>
+            
+            <TextInput
+              style={[styles.passcodeInput, { 
+                backgroundColor: colors.background,
+                color: colors.text,
+                borderColor: colors.border,
+              }]}
+              placeholder="Enter passcode"
+              placeholderTextColor={colors.icon}
+              value={passcode}
+              onChangeText={setPasscode}
+              secureTextEntry
+              keyboardType="numeric"
+              maxLength={6}
+              autoFocus
+              onSubmitEditing={handlePasscodeSubmit}
+            />
+            
+            <View style={styles.passcodeButtons}>
+              <Pressable 
+                style={[styles.passcodeButton, { backgroundColor: 'rgba(0,0,0,0.05)' }]}
+                onPress={() => {
+                  setShowPasscodeModal(false);
+                  setPasscode('');
+                }}
+              >
+                <ThemedText type="defaultSemiBold">Cancel</ThemedText>
+              </Pressable>
+              <Pressable 
+                style={[styles.passcodeButton, { backgroundColor: colors.tint }]}
+                onPress={handlePasscodeSubmit}
+              >
+                <ThemedText type="defaultSemiBold" style={{ color: '#fff' }}>Submit</ThemedText>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </ThemedView>
   );
 }
@@ -363,27 +483,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f59e0b',
     alignItems: 'center',
   },
-  sandboxContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 14,
-    borderRadius: 10,
-    backgroundColor: 'rgba(147, 51, 234, 0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(147, 51, 234, 0.2)',
-  },
-  sandboxToggle: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.1)',
-    minWidth: 60,
-    alignItems: 'center',
-  },
-  sandboxToggleActive: {
-    backgroundColor: '#9333ea',
-  },
+
   restoreButton: {
     paddingVertical: 12,
     paddingHorizontal: 20,
@@ -392,5 +492,71 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.1)',
+  },
+  managerAccessButton: {
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.2)',
+  },
+  managerCard: {
+    padding: 20,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.2)',
+  },
+  managerBadge: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  revokeButton: {
+    marginTop: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  passcodeModal: {
+    width: '100%',
+    maxWidth: 400,
+    borderRadius: 16,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  passcodeInput: {
+    fontSize: 18,
+    fontWeight: '600',
+    textAlign: 'center',
+    letterSpacing: 4,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    borderWidth: 2,
+    marginBottom: 20,
+  },
+  passcodeButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  passcodeButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center',
   },
 });
