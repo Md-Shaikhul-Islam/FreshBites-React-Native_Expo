@@ -1,101 +1,73 @@
 import { supabase } from '@/config/supabase';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
-export type NotificationType = 'product_added' | 'product_removed';
+export type NotificationType = 'product_added' | 'product_removed' | 'order_placed';
 
 export interface SupabaseNotification {
   id: string;
+  user_id: string;
   type: NotificationType;
   product_id: string;
   product_title: string;
   product_image?: string;
+  customer_name?: string; // For order notifications
+  is_read: boolean;
+  created_by_user?: string; // Who triggered the notification
   created_at: string;
-  read_by: string[];
+  updated_at: string;
 }
 
 /**
- * Fetch recent notifications from Supabase
+ * Fetch notifications for a specific user
+ * Much simpler now - just query by user_id!
  */
-export async function fetchNotifications(limit = 50): Promise<SupabaseNotification[]> {
+export async function fetchNotifications(userId: string, limit = 50): Promise<SupabaseNotification[]> {
   try {
     const { data, error } = await supabase
       .from('notifications')
       .select('*')
+      .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(limit);
 
     if (error) {
-      console.error('Error fetching notifications:', error);
+      console.error('❌ Error fetching notifications:', error);
       return [];
     }
 
+    console.log(`✅ Fetched ${data?.length || 0} notifications for user ${userId}`);
     return data || [];
   } catch (error) {
-    console.error('Error in fetchNotifications:', error);
+    console.error('❌ Error in fetchNotifications:', error);
     return [];
   }
 }
 
 /**
- * Mark notification as read for current device
- */
-export async function markNotificationAsRead(notificationId: string, deviceId: string): Promise<void> {
-  try {
-    // Get current notification
-    const { data: notification } = await supabase
-      .from('notifications')
-      .select('read_by')
-      .eq('id', notificationId)
-      .single();
-
-    if (!notification) return;
-
-    // Add device to read_by array if not already there
-    const readBy = notification.read_by || [];
-    if (!readBy.includes(deviceId)) {
-      readBy.push(deviceId);
-
-      const { error } = await supabase
-        .from('notifications')
-        .update({ read_by: readBy })
-        .eq('id', notificationId);
-
-      if (error) {
-        console.error('Error marking notification as read:', error);
-      }
-    }
-  } catch (error) {
-    console.error('Error in markNotificationAsRead:', error);
-  }
-}
-
-/**
- * Subscribe to real-time notification changes
+ * Subscribe to real-time notifications for a specific user
  */
 export function subscribeToNotifications(
-  callback: (notification: SupabaseNotification) => void
+  userId: string,
+  onNotification: (notification: SupabaseNotification) => void
 ): RealtimeChannel {
+  console.log('🔔 Subscribing to notifications for user:', userId);
+
   const channel = supabase
-    .channel('notifications-channel')
+    .channel(`notifications:user_id=eq.${userId}`)
     .on(
       'postgres_changes',
       {
         event: 'INSERT',
         schema: 'public',
         table: 'notifications',
+        filter: `user_id=eq.${userId}`,
       },
       (payload) => {
         console.log('📩 New notification received:', payload.new);
-        callback(payload.new as SupabaseNotification);
+        onNotification(payload.new as SupabaseNotification);
       }
     )
-    .subscribe((status) => {
-      if (status === 'SUBSCRIBED') {
-        console.log('✅ Subscribed to notifications');
-      } else {
-        console.log('📡 Subscription status:', status);
-      }
-    });
+    .subscribe();
 
   return channel;
 }
@@ -103,47 +75,118 @@ export function subscribeToNotifications(
 /**
  * Unsubscribe from notifications
  */
-export async function unsubscribeFromNotifications(channel: RealtimeChannel): Promise<void> {
-  await supabase.removeChannel(channel);
+export function unsubscribeFromNotifications(channel: RealtimeChannel): void {
+  console.log('🔕 Unsubscribing from notifications');
+  channel.unsubscribe();
 }
 
 /**
- * Mark all existing notifications as read for a new device (first install)
+ * Mark a single notification as read
  */
-export async function markAllExistingNotificationsAsRead(deviceId: string): Promise<void> {
+export async function markNotificationAsRead(notificationId: string, userId: string): Promise<void> {
   try {
-    console.log('📝 Marking all existing notifications as read for new device:', deviceId);
-    
-    // Get all notifications
-    const { data: notifications, error: fetchError } = await supabase
+    const { error } = await supabase
       .from('notifications')
-      .select('id, read_by');
+      .update({ is_read: true, updated_at: new Date().toISOString() })
+      .eq('id', notificationId)
+      .eq('user_id', userId);
 
-    if (fetchError) {
-      console.error('Error fetching notifications:', fetchError);
-      return;
+    if (error) {
+      console.error('❌ Error marking notification as read:', error);
+      throw error;
     }
 
-    if (!notifications || notifications.length === 0) {
-      console.log('No notifications to mark as read');
-      return;
+    console.log('✅ Marked notification as read:', notificationId);
+  } catch (error) {
+    console.error('❌ Error in markNotificationAsRead:', error);
+    throw error;
+  }
+}
+
+/**
+ * Mark all notifications as read for a user
+ */
+export async function markAllNotificationsAsRead(userId: string): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from('notifications')
+      .update({ is_read: true, updated_at: new Date().toISOString() })
+      .eq('user_id', userId)
+      .eq('is_read', false);
+
+    if (error) {
+      console.error('❌ Error marking all notifications as read:', error);
+      throw error;
     }
 
-    // Update each notification to include this device in read_by
-    for (const notif of notifications) {
-      const readBy = notif.read_by || [];
-      if (!readBy.includes(deviceId)) {
-        readBy.push(deviceId);
-        
-        await supabase
-          .from('notifications')
-          .update({ read_by: readBy })
-          .eq('id', notif.id);
+    console.log('✅ Marked all notifications as read for user:', userId);
+  } catch (error) {
+    console.error('❌ Error in markAllNotificationsAsRead:', error);
+    throw error;
+  }
+}
+
+/**
+ * Clear all notifications for a user
+ */
+export async function clearAllNotifications(userId: string): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from('notifications')
+      .delete()
+      .eq('user_id', userId);
+
+    if (error) {
+      console.error('❌ Error clearing notifications:', error);
+      throw error;
+    }
+
+    console.log('✅ Cleared all notifications for user:', userId);
+  } catch (error) {
+    console.error('❌ Error in clearAllNotifications:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get unread count for a user (optionally filtered by preferences)
+ */
+export async function getUnreadCount(
+  userId: string,
+  preferences?: { product_added: boolean; product_removed: boolean; order_placed: boolean }
+): Promise<number> {
+  try {
+    let query = supabase
+      .from('notifications')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('is_read', false);
+
+    // Apply preference filters if provided
+    if (preferences) {
+      const enabledTypes: string[] = [];
+      if (preferences.product_added) enabledTypes.push('product_added');
+      if (preferences.product_removed) enabledTypes.push('product_removed');
+      if (preferences.order_placed) enabledTypes.push('order_placed');
+
+      if (enabledTypes.length > 0) {
+        query = query.in('type', enabledTypes);
+      } else {
+        // If all types disabled, return 0
+        return 0;
       }
     }
 
-    console.log(`✅ Marked ${notifications.length} notifications as read for new device`);
+    const { count, error } = await query;
+
+    if (error) {
+      console.error('❌ Error getting unread count:', error);
+      return 0;
+    }
+
+    return count || 0;
   } catch (error) {
-    console.error('Error in markAllExistingNotificationsAsRead:', error);
+    console.error('❌ Error in getUnreadCount:', error);
+    return 0;
   }
 }

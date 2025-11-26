@@ -14,7 +14,7 @@ import {
   saveNotificationPreferences,
   type NotificationPreferences
 } from '@/services/notification-preferences';
-import type { SupabaseNotification } from '@/services/supabase-notifications';
+import type { NotificationItem } from '@/services/notification-storage';
 
 type FilterType = 'all' | 'added' | 'removed' | 'ordered';
 type FilterStatus = 'all' | 'read' | 'unread';
@@ -92,14 +92,14 @@ export default function NotificationsScreen() {
       if (filterType === 'ordered' && notif.type !== 'order_placed') return false;
       
       // Filter by status
-      if (filterStatus === 'read' && !notif.is_read) return false;
-      if (filterStatus === 'unread' && notif.is_read) return false;
+      if (filterStatus === 'read' && !notif.read) return false;
+      if (filterStatus === 'unread' && notif.read) return false;
       
       return true;
     });
   }, [notifications, filterType, filterStatus, preferences]);
 
-  const handleNotificationPress = async (notification: SupabaseNotification) => {
+  const handleNotificationPress = async (notification: NotificationItem) => {
     // Mark as read
     await markAsRead(notification.id);
 
@@ -112,7 +112,7 @@ export default function NotificationsScreen() {
     }
   };
 
-  const renderNotification = ({ item }: { item: SupabaseNotification }) => {
+  const renderNotification = ({ item }: { item: NotificationItem }) => {
     // Determine notification type and display text
     const isAdded = item.type === 'product_added';
     const isRemoved = item.type === 'product_removed';
@@ -136,7 +136,7 @@ export default function NotificationsScreen() {
       iconSymbol = '×';
     }
     
-    const bgColor = item.is_read ? colors.card : colors.tint + '15';
+    const bgColor = item.read ? colors.card : colors.tint + '15';
 
     return (
       <Pressable
@@ -144,9 +144,9 @@ export default function NotificationsScreen() {
         style={[styles.notificationItem, { backgroundColor: bgColor }]}
       >
         <View style={styles.iconContainer}>
-          {item.product_image && !isOrder ? (
+          {item.productImage && !isOrder ? (
                   <Image 
-                    source={{ uri: item.product_image }} 
+                    source={{ uri: item.productImage }} 
                     style={styles.productImage}
                     defaultSource={require('@/assets/images/icon.png')}
                     resizeMode="contain" /* show full notification image */
@@ -162,18 +162,18 @@ export default function NotificationsScreen() {
             {actionText}
           </ThemedText>
           <ThemedText style={{ color: colors.text, marginTop: 4 }}>
-            {item.product_title}
+            {item.productTitle}
           </ThemedText>
-          {item.customer_name && isOrder && (
+          {item.creatorName && (
             <ThemedText style={{ color: colors.text, opacity: 0.6, fontSize: 11, marginTop: 2 }}>
-              👤 Ordered by: {item.customer_name}
+              👤 {isOrder ? 'Ordered by' : 'By'}: {item.creatorName}
             </ThemedText>
           )}
           <ThemedText style={{ color: colors.text, opacity: 0.5, fontSize: 12, marginTop: 4 }}>
-            {new Date(item.created_at).toLocaleString()}
+            {new Date(item.timestamp).toLocaleString()}
           </ThemedText>
         </View>
-        {!item.is_read && (
+        {!item.read && (
           <View style={[styles.unreadDot, { backgroundColor: colors.tint }]} />
         )}
       </Pressable>

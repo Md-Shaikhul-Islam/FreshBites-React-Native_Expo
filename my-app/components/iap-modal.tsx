@@ -3,13 +3,13 @@ import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import React, { useState } from 'react';
 import {
-    ActivityIndicator,
-    Animated,
-    Modal,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    View,
+  ActivityIndicator,
+  Animated,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
 } from 'react-native';
 
 type IAPModalProps = {
@@ -160,10 +160,10 @@ export function IAPModal({
               <View style={styles.successIcon}>
                 <ThemedText style={{ fontSize: 60 }}>✅</ThemedText>
               </View>
-              <ThemedText type="title" style={{ marginTop: 24, textAlign: 'center', color: colors.success }}>
+              <ThemedText type="title" style={{ marginTop: 24, textAlign: 'center', color: colors.success, fontSize: 22 }}>
                 Purchase Successful!
               </ThemedText>
-              <ThemedText style={{ marginTop: 8, textAlign: 'center', opacity: 0.7 }}>
+              <ThemedText style={{ marginTop: 8, textAlign: 'center', opacity: 0.7, paddingHorizontal: 8, lineHeight: 20 }}>
                 Welcome to Premium! Your account has been upgraded.
               </ThemedText>
               <View style={[styles.successDetails, { backgroundColor: colors.card }]}>
