@@ -586,4 +586,8 @@ Add your app screenshots here to showcase the UI.
 
 ---
 
+
+APK link - https://expo.dev/accounts/md.shaikhul-islam/projects/freshbites/builds/af9d45ce-3101-4327-9cea-5749655b1906
+
+
 **Happy Coding! 🚀**
